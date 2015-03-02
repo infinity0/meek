@@ -1,12 +1,12 @@
-// meek-client-torbrowser is an auxiliary program that helps with connecting
+// meek-client-wrapper is an auxiliary program that helps with connecting
 // meek-client to meek-http-helper running in Tor Browser.
 //
 // Sample usage in torrc (exact paths depend on platform):
-// 	ClientTransportPlugin meek exec ./meek-client-torbrowser --log meek-client-torbrowser.log --helper ./tbb-windows.bat -- ./meek-client --url=https://meek-reflect.appspot.com/ --front=www.google.com --log meek-client.log
+// 	ClientTransportPlugin meek exec ./meek-client-wrapper --log meek-client-wrapper.log --helper ./tbb-windows.bat -- ./meek-client --url=https://meek-reflect.appspot.com/ --front=www.google.com --log meek-client.log
 // Everything up to "--" is options for this program. Everything following it is
 // a meek-client command line.
 //
-// This program, meek-client-torbrowser, starts a browser-helper program
+// This program, meek-client-wrapper, starts a browser-helper program
 // specified by the --helper option. This is executed with no arguments; use a
 // shell script if you need something more complex. It should launch a browser
 // process that has been configured to use the meek-http-helper extension,
@@ -41,7 +41,7 @@ import (
 var helperAddrPattern = regexp.MustCompile(`^meek-http-helper: listen (127\.0\.0\.1:\d+)$`)
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [meek-client-torbrowser args] -- meek-client [meek-client args]\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage: %s [meek-client-wrapper args] -- meek-client [meek-client args]\n", os.Args[0])
 	flag.PrintDefaults()
 }
 
