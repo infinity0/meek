@@ -4,10 +4,18 @@
 # and launches a new browser instance of it.
 
 PROFILE="__meek-browser-helper"
+PROFILEDIR="$HOME/.mozilla/firefox/__automated__.$PROFILE"
+EXTID="meek-http-helper@bamsoftware.com"
+EXTPATH="/usr/share/xul-ext/meek-http-helper"
 
 set -e
 
-firefox -CreateProfile "$PROFILE" # nop if already exists
+firefox -CreateProfile "$PROFILE $PROFILEDIR" # nop if already exists
+mkdir -p "$PROFILEDIR/extensions"
+test -e "$PROFILEDIR/extensions/$EXTID" || ln -sf "$EXTPATH" "$PROFILEDIR/extensions/$EXTID"
+test -f "$PROFILEDIR/extensions.ini" || cat >"$PROFILEDIR/extensions.ini" <<EOF
+[ExtensionDirs]
+Extension0=$PROFILEDIR/extensions/$EXTID
+EOF
 
-# TODO: check that the extension is enabled
 exec firefox -no-remote -P "$PROFILE"
