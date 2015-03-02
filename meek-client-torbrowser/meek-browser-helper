@@ -1,0 +1,13 @@
+#!/bin/sh
+# Example of a meek-browser-helper program.
+# This script creates a new profile, enables the meek-http-helper extension,
+# and launches a new browser instance of it.
+
+PROFILE="__meek-browser-helper"
+
+set -e
+
+firefox -CreateProfile "$PROFILE" # nop if already exists
+
+# TODO: check that the extension is enabled
+exec firefox -no-remote -P "$PROFILE"

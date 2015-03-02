@@ -2,18 +2,21 @@
 // meek-client to meek-http-helper running in Tor Browser.
 //
 // Sample usage in torrc (exact paths depend on platform):
-// 	ClientTransportPlugin meek exec ./meek-client-torbrowser --log meek-client-torbrowser.log -- ./meek-client --url=https://meek-reflect.appspot.com/ --front=www.google.com --log meek-client.log
+// 	ClientTransportPlugin meek exec ./meek-client-torbrowser --log meek-client-torbrowser.log --helper ./tbb-windows.bat -- ./meek-client --url=https://meek-reflect.appspot.com/ --front=www.google.com --log meek-client.log
 // Everything up to "--" is options for this program. Everything following it is
-// a meek-client command line. The command line for running firefox is implicit
-// and hardcoded in this program.
+// a meek-client command line.
 //
-// This program, meek-client-torbrowser, starts a copy of firefox under the
-// meek-http-helper profile, which must have configured the meek-http-helper
-// extension. This program reads the stdout of firefox, looking for a special
+// This program, meek-client-torbrowser, starts a browser-helper program
+// specified by the --helper option. This is executed with no arguments; use a
+// shell script if you need something more complex. It should launch a browser
+// process that has been configured to use the meek-http-helper extension,
+// ideally in a separate browser profile not used for any other purpose.
+//
+// This program then reads the stdout of the helper, looking for a special
 // line with the listening port number of the extension, one that looks like
 // "meek-http-helper: listen <address>". The meek-client command is then
-// executed as given, except that a --helper option is added that points to the
-// port number read from firefox.
+// executed as given, except that a --helper option is added to it, that points
+// to the port number read from the browser-helper.
 //
 // This program proxies stdin and stdout to and from meek-client, so it is
 // actually meek-client that drives the pluggable transport negotiation with
@@ -30,7 +33,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"regexp"
 	"syscall"
 )
@@ -63,26 +65,20 @@ func logSignal(p *os.Process, sig os.Signal) error {
 	return err
 }
 
-// Run firefox and return its exec.Cmd and stdout pipe.
-func runFirefox() (cmd *exec.Cmd, stdout io.Reader, err error) {
-	var profilePath string
-	// Mac OS X needs an absolute profile path.
-	profilePath, err = filepath.Abs(firefoxProfilePath)
-	if err != nil {
-		return
-	}
-	cmd = exec.Command(firefoxPath, "-no-remote", "-profile", profilePath)
+// Run browser helper and return its exec.Cmd and stdout pipe.
+func runBrowserHelper(browserHelperPath string) (cmd *exec.Cmd, stdout io.Reader, err error) {
+	cmd = exec.Command(browserHelperPath)
 	cmd.Stderr = os.Stderr
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
 		return
 	}
-	log.Printf("running firefox command %q", cmd.Args)
+	log.Printf("running browser-helper command %q", cmd.Args)
 	err = cmd.Start()
 	if err != nil {
 		return
 	}
-	log.Printf("firefox started with pid %d", cmd.Process.Pid)
+	log.Printf("browser-helper started with pid %d", cmd.Process.Pid)
 	return cmd, stdout, nil
 }
 
@@ -131,9 +127,11 @@ func runMeekClient(helperAddr string, meekClientCommandLine []string) (cmd *exec
 
 func main() {
 	var logFilename string
+	var browserHelperPath string
 
 	flag.Usage = usage
 	flag.StringVar(&logFilename, "log", "", "name of log file")
+	flag.StringVar(&browserHelperPath, "helper", "", "path to browser helper executable")
 	flag.Parse()
 
 	if logFilename != "" {
@@ -145,41 +143,20 @@ func main() {
 		log.SetOutput(f)
 	}
 
+	if browserHelperPath == "" {
+		log.Fatal("either specify a --helper, or run meek-client directly.")
+	}
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Unset environment variables that Firefox sets after a restart (as
-	// caused by, for example, an update or the installation of an add-on).
-	// XRE_PROFILE_PATH, in particular, overrides the -profile option that
-	// runFirefox sets, causing Firefox to run with profile.default instead
-	// of profile.meek-http-helper, which conflicts with the profile.default
-	// that is already running. See
-	// https://trac.torproject.org/projects/tor/ticket/13247, particularly
-	// #comment:17 and #comment:18. The environment variable names come from
-	// https://hg.mozilla.org/mozilla-central/file/cfde3603b020/toolkit/xre/nsAppRunner.cpp#l3941
-	var firefoxRestartEnvVars = []string{
-		"XRE_PROFILE_PATH",
-		"XRE_PROFILE_LOCAL_PATH",
-		"XRE_PROFILE_NAME",
-		"XRE_START_OFFLINE",
-		"NO_EM_RESTART",
-		"XUL_APP_FILE",
-		"XRE_BINARY_PATH",
-	}
-	for _, varname := range firefoxRestartEnvVars {
-		err := os.Unsetenv(varname)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	// Start firefox.
-	firefoxCmd, stdout, err := runFirefox()
+	// Start browser-helper.
+	browserHelperCmd, stdout, err := runBrowserHelper(browserHelperPath)
 	if err != nil {
 		log.Print(err)
 		return
 	}
-	defer logKill(firefoxCmd.Process)
+	defer logKill(browserHelperCmd.Process)
 
 	// Find out the helper's listening address.
 	helperAddr, err := grepHelperAddr(stdout)
