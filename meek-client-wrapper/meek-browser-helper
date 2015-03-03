@@ -3,6 +3,8 @@
 # This script creates a new profile, enables the meek-http-helper extension,
 # and launches a new browser instance of it.
 
+# sometimes HOME is not set
+HOME="${HOME:-$(getent passwd "$(id -un)" | cut -d: -f6)}"
 PROFILE="__meek-browser-helper"
 PROFILEDIR="$HOME/.mozilla/firefox/__automated__.$PROFILE"
 EXTID="meek-http-helper@bamsoftware.com"
@@ -10,7 +12,13 @@ EXTPATH="/usr/share/xul-ext/meek-http-helper"
 
 set -e
 
-firefox -CreateProfile "$PROFILE $PROFILEDIR" # nop if already exists
+FIREFOX=firefox
+if [ -z "$DISPLAY" ]; then
+	echo >&2 "DISPLAY not set, using Xvfb(1) for headless operation"
+	FIREFOX="xvfb-run -a firefox"
+fi
+
+$FIREFOX -CreateProfile "$PROFILE $PROFILEDIR" # nop if already exists
 mkdir -p "$PROFILEDIR/extensions"
 test -e "$PROFILEDIR/extensions/$EXTID" || ln -sf "$EXTPATH" "$PROFILEDIR/extensions/$EXTID"
 test -f "$PROFILEDIR/extensions.ini" || cat >"$PROFILEDIR/extensions.ini" <<EOF
@@ -18,4 +26,4 @@ test -f "$PROFILEDIR/extensions.ini" || cat >"$PROFILEDIR/extensions.ini" <<EOF
 Extension0=$PROFILEDIR/extensions/$EXTID
 EOF
 
-exec firefox -no-remote -P "$PROFILE"
+exec $FIREFOX -no-remote -P "$PROFILE"
