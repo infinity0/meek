@@ -1,0 +1,45 @@
+#!/usr/bin/make -f
+
+export DH_GOPKG := git.torproject.org/pluggable-transports/meek
+export DH_GOPKG_SUBDIRS := meek-client meek-client-wrapper meek-server
+
+DH_BUILDDIR = obj-$(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+%:
+	dh $@ --with xul-ext,golang
+
+DH_meek_go = -S golang
+DH_meek_doc = -S makefile -D doc
+# TODO: mozilla-devscripts doesn't actually yet handle -p properly
+# but things work ok because we define meek-http-helper first in debian/control
+DH_meek_http_helper = -p xul-ext-meek-http-helper -S xul_ext -D firefox
+
+override_dh_install:
+	dh_install -XCOPYING
+
+override_dh_auto_configure:
+	dh_auto_configure $(DH_meek_go)
+	dh_auto_configure $(DH_meek_doc)
+	dh_auto_configure $(DH_meek_http_helper)
+
+override_dh_auto_build:
+	cd $(DH_BUILDDIR) && GOPATH=$$PWD go install -v $(DH_GOPKG_SUBDIRS:%=$(DH_GOPKG)/%)
+	dh_auto_build $(DH_meek_doc)
+	dh_auto_build $(DH_meek_http_helper)
+
+override_dh_auto_test:
+	cd $(DH_BUILDDIR) && GOPATH=$$PWD go test -v $(DH_GOPKG_SUBDIRS:%=$(DH_GOPKG)/%)
+	dh_auto_test $(DH_meek_doc)
+	dh_auto_test $(DH_meek_http_helper)
+
+override_dh_auto_install:
+	dh_auto_install $(DH_meek_go)
+	dh_auto_install $(DH_meek_doc)
+	dh_auto_install $(DH_meek_http_helper)
+	# don't enable this extension by default, since it takes over the profile
+	rm -rf debian/xul-ext-meek-http-helper/usr/share/mozilla
+
+override_dh_auto_clean:
+	dh_auto_clean $(DH_meek_go)
+	dh_auto_clean $(DH_meek_doc)
+	dh_auto_clean $(DH_meek_http_helper)

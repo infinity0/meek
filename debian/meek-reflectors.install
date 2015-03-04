@@ -1,0 +1,4 @@
+appengine /usr/share/meek-reflectors
+nginx /usr/share/meek-reflectors
+php /usr/share/meek-reflectors
+wsgi /usr/share/meek-reflectors

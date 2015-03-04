@@ -1,0 +1,10 @@
+/*.substvars
+/*.debhelper.log
+/*.debhelper
+/files
+/tmp
+
+/meek-client/
+/meek-reflectors/
+/meek-server/
+/xul-ext-meek-http-helper/

@@ -1,0 +1,2 @@
+debian/tmp/usr/bin/meek-client /usr/bin
+debian/tmp/usr/bin/meek-client-wrapper /usr/bin

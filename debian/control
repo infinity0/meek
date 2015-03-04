@@ -1,0 +1,78 @@
+Source: meek
+Maintainer: Ximin Luo <infinity0@debian.org>
+Section: net
+Priority: extra
+Build-Depends: debhelper (>= 9),
+ asciidoc,
+ docbook-xsl,
+ dh-golang,
+ golang-go,
+ golang-goptlib-dev,
+ mozilla-devscripts,
+ xsltproc
+Standards-Version: 3.9.6
+Homepage: https://trac.torproject.org/projects/tor/wiki/doc/meek
+Vcs-Git: https://git.torproject.org/debian/meek.git
+Vcs-Browser: https://gitweb.torproject.org/debian/meek.git
+
+Package: xul-ext-meek-http-helper
+Architecture: all
+Depends: ${misc:Depends}, ${xpi:Depends}
+Recommends: ${xpi:Recommends}, xvfb, xauth
+Breaks: ${xpi:Breaks}
+Provides: ${xpi:Provides}
+Enhances: ${xpi:Enhances}
+Description: Circumvent IP address blocking using domain fronting - client browser helper
+ meek is a pluggable transport that uses HTTP for carrying bytes and TLS for
+ obfuscation. Traffic is relayed through a third-party server that is hard to
+ block, for example a ​CDN. It uses a trick called "domain fronting" to talk to
+ a Tor relay while appearing to talk to another domain.
+ .
+ This package contains an extension that lets external programs control the
+ browser to make outgoing connections that look like normal web browsing
+ traffic. Because it has a very specific use-case and completely changes the
+ behaviour of the browser, it is not installed as a system-level extension.
+ Instead, one should use the provided meek-browser-helper program, or else one
+ may install the extension into a specific browser profile manually.
+
+Package: meek-client
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Recommends: xul-ext-meek-http-helper
+Description: Circumvent IP address blocking using domain fronting - client tools
+ meek is a pluggable transport that uses HTTP for carrying bytes and TLS for
+ obfuscation. Traffic is relayed through a third-party server that is hard to
+ block, for example a ​CDN. It uses a trick called "domain fronting" to talk to
+ a Tor relay while appearing to talk to another domain.
+ .
+ This package contains client programs that enables censored Tor users to
+ circumvent censorship. It includes a bare Tor client transport plugin, and a
+ wrapper program that combines it with meek-http-helper to make outgoing
+ traffic look more realistic.
+
+Package: meek-server
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: Circumvent IP address blocking using domain fronting - server transport plugin
+ meek is a pluggable transport that uses HTTP for carrying bytes and TLS for
+ obfuscation. Traffic is relayed through a third-party server that is hard to
+ block, for example a ​CDN. It uses a trick called "domain fronting" to talk to
+ a Tor relay while appearing to talk to another domain.
+ .
+ This package contains a server transport plugin that accepts incoming meek
+ connections that look like the HTTP protocol, proxied by reflectors originally
+ from meek clients.
+
+Package: meek-reflectors
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: golang-go
+Description: Circumvent IP address blocking using domain fronting - reflector utilities
+ meek is a pluggable transport that uses HTTP for carrying bytes and TLS for
+ obfuscation. Traffic is relayed through a third-party server that is hard to
+ block, for example a ​CDN. It uses a trick called "domain fronting" to talk to
+ a Tor relay while appearing to talk to another domain.
+ .
+ This package contains code and tools to be installed on various types of web
+ servers that can support "domain fronting", that enable them to be used by
+ meek tor clients to connect with meek tor relays.

@@ -1,0 +1,4 @@
+version=3
+opts=downloadurlmangle=s/tag\/\?id=([\w\.]+)/snapshot\/$1.tar.gz/,\
+filenamemangle=s/.*\?id=([\w\.]+)$/meek-$1.tar.gz/\
+  https://gitweb.torproject.org/pluggable-transports/meek.git/refs/tags  ^.*tag/\?id=([\w\.]+)

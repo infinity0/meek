@@ -1,0 +1,17 @@
+Description: Disable net when using xsltproc
+Author: Ximin Luo <infinity0@debian.org>
+Origin: vendor
+Forwarded: not-needed
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/doc/Makefile
++++ b/doc/Makefile
+@@ -3,7 +3,7 @@
+ all: $(MAN)
+ 
+ %.1: %.1.txt
+-	a2x --no-xmllint --xsltproc-opts "--stringparam man.th.title.max.length 12" -d manpage -f manpage $<
++	a2x --no-xmllint --xsltproc-opts "--nonet --stringparam man.th.title.max.length 12" -d manpage -f manpage $<
+ 
+ clean:
+ 	rm -f $(MAN)
