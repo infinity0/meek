@@ -35,6 +35,7 @@ import (
 	"os/signal"
 	"regexp"
 	"syscall"
+	"time"
 )
 
 // This magic string is emitted by meek-http-helper.
@@ -45,13 +46,33 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-// Log a call to os.Process.Kill.
-func logKill(p *os.Process) error {
-	log.Printf("killing PID %d", p.Pid)
-	err := p.Kill()
+// Log a call to terminate the process
+func logTerminate(cmd *exec.Cmd, stdin io.WriteCloser) error {
+	var err error
+	p := cmd.Process
+
+	timer := time.AfterFunc(16 * time.Second, func() {
+		log.Printf("killing PID %d", p.Pid)
+		err := p.Kill()
+		if err != nil {
+			log.Fatal(err)
+		}
+	})
+	defer timer.Stop()
+
+	log.Printf("closing stdin of and sending TERM to PID %d", p.Pid)
+	// tell child process on a "best-effort" basis to clean up and close itself
+	stdin.Close()
+	// below returns an error (effectively a nop) on Windows, ignore it -
+	// hopefully child got the hint with stdin.Close().
+	p.Signal(syscall.SIGTERM)
+
+	_, err = p.Wait()
 	if err != nil {
 		log.Print(err)
 	}
+	log.Printf("cleanly closed PID %d", p.Pid)
+
 	return err
 }
 
@@ -66,9 +87,13 @@ func logSignal(p *os.Process, sig os.Signal) error {
 }
 
 // Run browser helper and return its exec.Cmd and stdout pipe.
-func runBrowserHelper(browserHelperPath string) (cmd *exec.Cmd, stdout io.Reader, err error) {
+func runBrowserHelper(browserHelperPath string) (cmd *exec.Cmd, stdin io.WriteCloser, stdout io.Reader, err error) {
 	cmd = exec.Command(browserHelperPath)
 	cmd.Stderr = os.Stderr
+	stdin, err = cmd.StdinPipe()
+	if err != nil {
+		return
+	}
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
 		return
@@ -79,7 +104,7 @@ func runBrowserHelper(browserHelperPath string) (cmd *exec.Cmd, stdout io.Reader
 		return
 	}
 	log.Printf("browser-helper started with pid %d", cmd.Process.Pid)
-	return cmd, stdout, nil
+	return cmd, stdin, stdout, nil
 }
 
 // Look for the magic meek-http-helper address string in the Reader, and return
@@ -109,11 +134,15 @@ func grepHelperAddr(r io.Reader) (string, error) {
 }
 
 // Run meek-client and return its exec.Cmd.
-func runMeekClient(helperAddr string, meekClientCommandLine []string) (cmd *exec.Cmd, err error) {
+func runMeekClient(helperAddr string, meekClientCommandLine []string) (cmd *exec.Cmd, stdin io.WriteCloser, err error) {
 	meekClientPath := meekClientCommandLine[0]
 	args := meekClientCommandLine[1:]
 	args = append(args, []string{"--helper", helperAddr}...)
 	cmd = exec.Command(meekClientPath, args...)
+	stdin, err = cmd.StdinPipe()
+	if err != nil {
+		return
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	log.Printf("running meek-client command %q", cmd.Args)
@@ -122,7 +151,7 @@ func runMeekClient(helperAddr string, meekClientCommandLine []string) (cmd *exec
 		return
 	}
 	log.Printf("meek-client started with pid %d", cmd.Process.Pid)
-	return cmd, nil
+	return cmd, stdin, nil
 }
 
 func main() {
@@ -151,12 +180,12 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Start browser-helper.
-	browserHelperCmd, stdout, err := runBrowserHelper(browserHelperPath)
+	browserHelperCmd, stdin, stdout, err := runBrowserHelper(browserHelperPath)
 	if err != nil {
 		log.Print(err)
 		return
 	}
-	defer logKill(browserHelperCmd.Process)
+	defer logTerminate(browserHelperCmd, stdin)
 
 	// Find out the helper's listening address.
 	helperAddr, err := grepHelperAddr(stdout)
@@ -166,12 +195,12 @@ func main() {
 	}
 
 	// Start meek-client with the helper address.
-	meekClientCmd, err := runMeekClient(helperAddr, flag.Args())
+	meekClientCmd, meekClientStdin, err := runMeekClient(helperAddr, flag.Args())
 	if err != nil {
 		log.Print(err)
 		return
 	}
-	defer logKill(meekClientCmd.Process)
+	defer logTerminate(meekClientCmd, meekClientStdin)
 
 	if os.Getenv("TOR_PT_EXIT_ON_STDIN_CLOSE") == "1" {
 		// This environment variable means we should treat EOF on stdin
@@ -185,7 +214,7 @@ func main() {
 	}
 
 	sig := <-sigChan
-	log.Printf("sig %s", sig)
+	log.Printf("received signal %s", sig)
 	err = logSignal(meekClientCmd.Process, sig)
 	if err != nil {
 		log.Print(err)
@@ -194,7 +223,7 @@ func main() {
 	// If SIGINT, wait for a second SIGINT.
 	if sig == syscall.SIGINT {
 		sig := <-sigChan
-		log.Printf("sig %s", sig)
+		log.Printf("received signal %s", sig)
 		err = logSignal(meekClientCmd.Process, sig)
 		if err != nil {
 			log.Print(err)
