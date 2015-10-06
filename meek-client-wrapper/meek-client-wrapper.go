@@ -6,11 +6,24 @@
 // Everything up to "--" is options for this program. Everything following it is
 // a meek-client command line.
 //
-// This program, meek-client-wrapper, starts a browser-helper program
-// specified by the --helper option. This is executed with no arguments; use a
-// shell script if you need something more complex. It should launch a browser
-// process that has been configured to use the meek-http-helper extension,
-// ideally in a separate browser profile not used for any other purpose.
+// This program, meek-client-wrapper, starts a browser-helper program specified
+// by the --helper option. This is executed with no arguments; use a shell
+// script if you need something more complex. Alternatively, you may point to a
+// file with the ".meek-browser-helper" suffix, which is a basic custom format
+// for specifying what to execute. An example of its format:
+//
+// -- begin example file --
+// # comments and empty lines are ignored
+// OPTIONAL_SET_ENV1=value1
+// OPTIONAL_UNSET_ENV=
+// program_executable
+// optional_arg1
+// optional_arg2
+// -- end example file --
+//
+// In any case, the browser-helper program should launch a browser process that
+// has been configured to use the meek-http-helper extension, ideally in a
+// separate browser profile not used for any other purpose.
 //
 // This program then reads the stdout of the helper, looking for a special
 // line with the listening port number of the extension, one that looks like
@@ -25,6 +38,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -34,6 +48,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"regexp"
+	"strings"
 	"syscall"
 )
 
@@ -65,9 +80,60 @@ func logSignal(p *os.Process, sig os.Signal) error {
 	return err
 }
 
+// Convert the helper filename into a command line string slice
+func browserHelperToCmdLine(browserHelperPath string) (command []string, err error) {
+	if (strings.HasSuffix(browserHelperPath, ".meek-browser-helper")) {
+		var file *os.File
+		file, err = os.Open(browserHelperPath)
+		if err != nil {
+			return
+		}
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		settingEnv := true
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			} else if settingEnv && strings.Contains(line, "=") {
+				envpair := strings.SplitN(line, "=", 2)
+				if envpair[1] == "" {
+					log.Printf("unset envvar %s", envpair[0])
+					err = os.Unsetenv(envpair[0])
+				} else {
+					log.Printf("set envvar %s=%s", envpair[0], envpair[1])
+					err = os.Setenv(envpair[0], envpair[1])
+				}
+				if err != nil {
+					return
+				}
+			} else {
+				settingEnv = false
+				command = append(command, line)
+			}
+		}
+		err = scanner.Err()
+		if err != nil {
+			return
+		}
+		if (len(command) == 0) {
+			err = errors.New("no commands in meek-browser-helper file: " + browserHelperPath)
+			return
+		}
+	} else {
+		command = []string{browserHelperPath}
+	}
+	return
+}
+
 // Run browser helper and return its exec.Cmd and stdout pipe.
 func runBrowserHelper(browserHelperPath string) (cmd *exec.Cmd, stdout io.Reader, err error) {
-	cmd = exec.Command(browserHelperPath)
+	var command []string
+	command, err = browserHelperToCmdLine(browserHelperPath)
+	if err != nil {
+		return
+	}
+	cmd = exec.Command(command[0], command[1:]...)
 	cmd.Stderr = os.Stderr
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
