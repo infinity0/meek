@@ -7,10 +7,9 @@
 // a meek-client command line.
 //
 // This program, meek-client-wrapper, starts a browser-helper program specified
-// by the --helper option. This is executed with no arguments; use a shell
-// script if you need something more complex. Alternatively, you may point to a
-// file with the ".meek-browser-helper" suffix, which is a basic custom format
-// for specifying what to execute. An example of its format:
+// by the --helper option. On non-Windows platforms, this is executed with no
+// arguments; use a shell script if you need something more complex. On Windows,
+// this file instead *describes* what to execute. An example of its format:
 //
 // -- begin example file --
 // # comments and empty lines are ignored
@@ -38,7 +37,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -48,7 +46,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"regexp"
-	"strings"
 	"syscall"
 )
 
@@ -78,52 +75,6 @@ func logSignal(p *os.Process, sig os.Signal) error {
 		log.Print(err)
 	}
 	return err
-}
-
-// Convert the helper filename into a command line string slice
-func browserHelperToCmdLine(browserHelperPath string) (command []string, err error) {
-	if (strings.HasSuffix(browserHelperPath, ".meek-browser-helper")) {
-		var file *os.File
-		file, err = os.Open(browserHelperPath)
-		if err != nil {
-			return
-		}
-		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		settingEnv := true
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			} else if settingEnv && strings.Contains(line, "=") {
-				envpair := strings.SplitN(line, "=", 2)
-				if envpair[1] == "" {
-					log.Printf("unset envvar %s", envpair[0])
-					err = os.Unsetenv(envpair[0])
-				} else {
-					log.Printf("set envvar %s=%s", envpair[0], envpair[1])
-					err = os.Setenv(envpair[0], envpair[1])
-				}
-				if err != nil {
-					return
-				}
-			} else {
-				settingEnv = false
-				command = append(command, line)
-			}
-		}
-		err = scanner.Err()
-		if err != nil {
-			return
-		}
-		if (len(command) == 0) {
-			err = errors.New("no commands in meek-browser-helper file: " + browserHelperPath)
-			return
-		}
-	} else {
-		command = []string{browserHelperPath}
-	}
-	return
 }
 
 // Run browser helper and return its exec.Cmd and stdout pipe.
@@ -197,7 +148,7 @@ func main() {
 
 	flag.Usage = usage
 	flag.StringVar(&logFilename, "log", "", "name of log file")
-	flag.StringVar(&browserHelperPath, "helper", "", "path to browser helper executable")
+	flag.StringVar(&browserHelperPath, "helper", "", browserHelperToCmdLineHelp)
 	flag.Parse()
 
 	if logFilename != "" {
